@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Compass, Wifi, Leaf, Volume2, Heart, DollarSign, Trees, BookOpen, Camera, Coffee } from "lucide-react"
+import Image from "next/image"
 
 const preferenceCategories = [
   { id: "wifi-cafes", label: "Wi-Fi cafés", icon: Wifi, selected: false },
@@ -46,8 +47,14 @@ export default function OnboardingPage() {
         {/* Logo and Progress */}
         <div className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Compass className="h-7 w-7 text-primary-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary overflow-hidden">
+              <Image 
+                src="/urnavlogo.jpeg" 
+                alt="UrNav Logo" 
+                width={48} 
+                height={48}
+                className="object-cover"
+              />
             </div>
           </div>
           <div className="space-y-2">

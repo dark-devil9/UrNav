@@ -18,123 +18,244 @@ import {
   Map,
   Navigation,
   Star,
+  Sparkles,
+  Trash2,
+  Loader2,
 } from "lucide-react"
+import { FloatingMic } from "@/components/floating-mic"
+import { SuggestionCard, type Suggestion } from "@/components/suggestion-card"
+import { useGeo } from "@/hooks/use-geo"
+import { toast } from "sonner"
 
 interface Message {
   id: string
-  type: "user" | "assistant" | "suggestion"
+  type: "user" | "assistant"
   content: string
   timestamp: Date
-  suggestions?: PlaceSuggestion[]
 }
 
-interface PlaceSuggestion {
-  id: string
-  name: string
-  category: string
-  rating: number
-  distance: string
-  tags: string[]
-  image: string
+interface UserInfo {
+  name: string | null
+  location: any
+  preferences: string[]
 }
-
-const mockSuggestions: PlaceSuggestion[] = [
-  {
-    id: "1",
-    name: "Cafe Coffee Day",
-    category: "Coffee Shop",
-    rating: 4.2,
-    distance: "0.3 km",
-    tags: ["Wi-Fi", "Budget-friendly"],
-    image: "/cozy-coffee-shop.png",
-  },
-  {
-    id: "2",
-    name: "Central Park Library",
-    category: "Library",
-    rating: 4.5,
-    distance: "0.8 km",
-    tags: ["Quiet", "Free"],
-    image: "/modern-library-interior.png",
-  },
-]
-
-const quickActions = [
-  { id: "plan-day", label: "Plan My Day", icon: Calendar },
-  { id: "free-places", label: "Free Places Nearby", icon: MapPin },
-  { id: "meet-friend", label: "Meet a Friend", icon: Users },
-  { id: "ask-anything", label: "Ask Anything", icon: MessageCircle },
-]
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      type: "assistant",
-      content:
-        "Hi! I'm URNAV, your navigation assistant. I can help you discover places, plan your day, or find the perfect spot to meet friends. What would you like to explore today?",
-      timestamp: new Date(),
-      suggestions: mockSuggestions,
-    },
-  ])
   const [inputValue, setInputValue] = useState("")
-  const [isRecording, setIsRecording] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [isTyping, setIsTyping] = useState(false)
+  const [userInfo, setUserInfo] = useState<UserInfo>({
+    name: null,
+    location: null,
+    preferences: []
+  })
+  const [userId, setUserId] = useState<string>("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const { coords } = useGeo()
+
+  // Initialize chat with welcome message
+  useEffect(() => {
+    if (messages.length === 0 && coords) {
+      const welcomeMsg: Message = {
+        id: Date.now().toString(),
+        type: "assistant",
+        content: `Hi! I'm URNAV, your AI travel companion! I can see you're near coordinates (${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}). I can help you discover amazing places, answer questions, and plan your adventures. What would you like to explore today?`,
+        timestamp: new Date(),
+      }
+      setMessages([welcomeMsg])
+      
+      // Generate unique user ID
+      setUserId(`user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+    }
+  }, [coords, messages.length])
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || !coords) return
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return
-
-    const newMessage: Message = {
+    const userMessage: Message = {
       id: Date.now().toString(),
       type: "user",
       content: inputValue,
       timestamp: new Date(),
     }
 
-    setMessages((prev) => [...prev, newMessage])
+    setMessages(prev => [...prev, userMessage])
     setInputValue("")
+    setIsTyping(true)
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: inputValue,
+          user_id: userId, // Always send the current userId
+          location: {
+            lat: coords.lat,
+            lon: coords.lon,
+            name: `Near coordinates (${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)})`
+          }
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      // Update userId if the backend generated a new one (first request)
+      if (data.user_id && data.user_id !== userId) {
+        console.log(`Updating userId from ${userId} to ${data.user_id}`)
+        setUserId(data.user_id)
+      }
+      
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: "I found some great options for you! Here are some places that match your preferences:",
+        content: data.response,
         timestamp: new Date(),
-        suggestions: mockSuggestions,
       }
-      setMessages((prev) => [...prev, aiResponse])
-    }, 1000)
-  }
 
-  const handleQuickAction = (actionId: string) => {
-    const actionLabels = {
-      "plan-day": "Help me plan my day",
-      "free-places": "Show me free places nearby",
-      "meet-friend": "I want to meet a friend",
-      "ask-anything": "I have a question",
+      setMessages(prev => [...prev, assistantMessage])
+      
+      // Update user info if provided
+      if (data.user_info) {
+        setUserInfo(data.user_info)
+      }
+
+    } catch (error) {
+      console.error("Error sending message:", error)
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: "Sorry, I'm having trouble processing your message right now. Please try again!",
+        timestamp: new Date(),
+      }
+      setMessages(prev => [...prev, errorMessage])
+      toast.error("Failed to send message")
+    } finally {
+      setIsTyping(false)
     }
-
-    setInputValue(actionLabels[actionId as keyof typeof actionLabels] || "")
   }
 
-  const handleVoiceInput = () => {
-    setIsRecording(!isRecording)
-    // Voice input logic would go here
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
   }
+
+  const handleQuickAction = (action: string) => {
+    const actionMessages = {
+      "plan-day": "Help me plan my day with some interesting activities",
+      "free-places": "Show me free places to visit around here",
+      "meet-friend": "I want to find a good meeting spot with my friend",
+      "ask-anything": "What are the best attractions near me?"
+    }
+    
+    const message = actionMessages[action as keyof typeof actionMessages] || "What should I explore today?"
+    setInputValue(message)
+  }
+
+  const clearChat = async () => {
+    try {
+      if (!userId) {
+        toast.error("No active conversation to clear")
+        return
+      }
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/chat/user/${userId}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        setMessages([])
+        setUserInfo({ name: null, location: null, preferences: [] })
+        // Generate a new userId for fresh conversation
+        setUserId(`user_${Date.now()}`)
+        toast.success("Chat cleared successfully")
+      }
+    } catch (error) {
+      console.error("Error clearing chat:", error)
+      toast.error("Failed to clear chat")
+    }
+  }
+
+  const getLocationName = async (lat: number, lon: number): Promise<string> => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/places/geocode?query=${lat},${lon}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.name && data.name !== `${lat},${lon}`) {
+          return data.name
+        }
+      }
+      return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+    } catch (error) {
+      console.error('Error getting location name:', error)
+      return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+    }
+  }
+
+  // Update location display when coords change
+  useEffect(() => {
+    if (coords) {
+      getLocationName(coords.lat, coords.lon).then(locationName => {
+        setUserInfo(prev => ({
+          ...prev,
+          location: {
+            lat: coords.lat,
+            lon: coords.lon,
+            name: locationName
+          }
+        }))
+      })
+    }
+  }, [coords])
 
   return (
     <div className="flex h-full">
       {/* Chat Column */}
       <div className="flex-1 flex flex-col">
+        {/* Header with Location */}
+        <div className="p-4 border-b bg-card">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              <span className="text-sm font-medium">
+                {userInfo.location?.name || "Getting location..."}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              {userInfo.name && (
+                <Badge variant="secondary">
+                  👤 {userInfo.name}
+                </Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearChat}
+                className="h-8 px-2"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((message) => (
@@ -145,175 +266,116 @@ export function ChatInterface() {
                   className={`flex items-start space-x-3 max-w-[80%] ${message.type === "user" ? "flex-row-reverse space-x-reverse" : ""}`}
                 >
                   {message.type === "assistant" && (
-                    <Avatar className="h-8 w-8 bg-primary">
-                      <AvatarFallback className="text-primary-foreground text-sm font-medium">UN</AvatarFallback>
-                    </Avatar>
+                    <div className="relative h-8 w-8 rounded-full grid place-items-center bg-primary">
+                      <Avatar className="h-8 w-8 opacity-0">
+                        <AvatarFallback>UN</AvatarFallback>
+                      </Avatar>
+                      <Sparkles className="h-4 w-4 text-primary-foreground" />
+                    </div>
                   )}
                   <div
                     className={`rounded-2xl px-4 py-3 ${
                       message.type === "user" ? "bg-primary text-primary-foreground" : "bg-card border shadow-sm"
                     }`}
                   >
-                    <p className="text-sm">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-xs opacity-70 mt-2">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
               </div>
-
-              {/* Suggestions */}
-              {message.suggestions && (
-                <div className="ml-11 space-y-3">
-                  {message.suggestions.map((suggestion) => (
-                    <PlaceCard key={suggestion.id} suggestion={suggestion} />
-                  ))}
-                </div>
-              )}
             </div>
           ))}
+          
+          {/* Typing Indicator */}
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="flex items-start space-x-3">
+                <div className="relative h-8 w-8 rounded-full grid place-items-center bg-primary">
+                  <Loader2 className="h-4 w-4 text-primary-foreground animate-spin" />
+                </div>
+                <div className="bg-card border shadow-sm rounded-2xl px-4 py-3">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Quick Actions */}
-        <div className="p-4 border-t bg-card/50">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {quickActions.map((action) => {
-              const Icon = action.icon
-              return (
-                <Button
-                  key={action.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickAction(action.id)}
-                  className="rounded-full"
-                >
-                  <Icon className="h-4 w-4 mr-2" />
-                  {action.label}
-                </Button>
-              )
-            })}
-          </div>
-
-          {/* Input Area */}
+        {/* Input Area */}
+        <div className="p-4 border-t bg-card">
           <div className="flex items-center space-x-2">
-            <div className="flex-1 relative">
-              <Input
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Type or say what you need..."
-                className="pr-12 rounded-full"
-                onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                className={`absolute right-1 top-1/2 -translate-y-1/2 rounded-full h-8 w-8 p-0 ${
-                  isRecording ? "text-destructive" : "text-muted-foreground"
-                }`}
-                onClick={handleVoiceInput}
-              >
-                <Mic className="h-4 w-4" />
-              </Button>
-            </div>
-            <Button onClick={handleSendMessage} disabled={!inputValue.trim()} className="rounded-full h-10 w-10 p-0">
+            <Input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask me about places, travel, or just say hi..."
+              className="flex-1"
+              disabled={isTyping}
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || isTyping || !coords}
+              size="icon"
+              className="h-10 w-10"
+            >
               <Send className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-      </div>
 
-      {/* Contextual Panel - Hidden on mobile */}
-      <div className="hidden lg:block w-80 border-l bg-muted/20">
-        <div className="p-4 space-y-4">
-          <h3 className="font-serif font-semibold">Nearby Places</h3>
-          <div className="space-y-3">
-            {mockSuggestions.map((suggestion) => (
-              <Card key={suggestion.id} className="overflow-hidden">
-                <div className="aspect-video bg-muted">
-                  <img
-                    src={suggestion.image || "/placeholder.svg"}
-                    alt={suggestion.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <CardContent className="p-3">
-                  <h4 className="font-medium text-sm">{suggestion.name}</h4>
-                  <p className="text-xs text-muted-foreground">{suggestion.category}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center space-x-1">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs">{suggestion.rating}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{suggestion.distance}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          {/* Quick Action Buttons */}
+          <div className="flex gap-2 mt-3 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickAction("plan-day")}
+              disabled={isTyping}
+              className="text-xs"
+            >
+              <Calendar className="h-3 w-3 mr-1" />
+              Plan My Day
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickAction("free-places")}
+              disabled={isTyping}
+              className="text-xs"
+            >
+              <MapPin className="h-3 w-3 mr-1" />
+              Free Places
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickAction("meet-friend")}
+              disabled={isTyping}
+              className="text-xs"
+            >
+              <Users className="h-3 w-3 mr-1" />
+              Meet Friend
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickAction("ask-anything")}
+              disabled={isTyping}
+              className="text-xs"
+            >
+              <MessageCircle className="h-3 w-3 mr-1" />
+              Ask Anything
+            </Button>
           </div>
         </div>
       </div>
     </div>
   )
 }
-
-function PlaceCard({ suggestion }: { suggestion: PlaceSuggestion }) {
-  return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow">
-      <div className="flex">
-        <div className="w-24 h-20 bg-muted flex-shrink-0">
-          <img
-            src={suggestion.image || "/placeholder.svg"}
-            alt={suggestion.name}
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <CardContent className="flex-1 p-3">
-          <div className="space-y-2">
-            <div>
-              <h4 className="font-medium text-sm">{suggestion.name}</h4>
-              <p className="text-xs text-muted-foreground">{suggestion.category}</p>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center space-x-1">
-                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                  <span className="text-xs">{suggestion.rating}</span>
-                </div>
-                <span className="text-xs text-muted-foreground">{suggestion.distance}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-1">
-              {suggestion.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-xs px-2 py-0">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-
-            <div className="flex items-center space-x-2 pt-1">
-              <Button size="sm" className="h-7 text-xs">
-                <Navigation className="h-3 w-3 mr-1" />
-                Route
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent">
-                <ThumbsUp className="h-3 w-3 mr-1" />
-                Helpful
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent">
-                <ThumbsDown className="h-3 w-3 mr-1" />
-                Not Helpful
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent">
-                <Map className="h-3 w-3 mr-1" />
-                Map
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </div>
-    </Card>
-  )
-}
+ 

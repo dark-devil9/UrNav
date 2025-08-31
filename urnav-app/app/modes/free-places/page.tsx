@@ -1,12 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { TopNavigation, BottomNavigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Heart, X, Star, MapPin, RefreshCw, ArrowLeft } from "lucide-react"
+import { useBudgetMode } from "@/hooks/use-budget"
+import { useMemory } from "@/hooks/use-memory"
 import Link from "next/link"
+import { useGeo } from "@/hooks/use-geo"
+import { searchPlaces } from "@/lib/api"
 
 interface Place {
   id: string
@@ -19,58 +23,67 @@ interface Place {
   isFree: boolean
 }
 
-const mockPlaces: Place[] = [
-  {
-    id: "1",
-    name: "Central Park",
-    category: "Public Park",
-    rating: 4.5,
-    distance: "0.8 km",
-    tags: ["Free", "Nature", "Walking trails"],
-    image: "/beautiful-park-with-trees.png",
-    isFree: true,
-  },
-  {
-    id: "2",
-    name: "City Art Gallery",
-    category: "Art Gallery",
-    rating: 4.3,
-    distance: "1.2 km",
-    tags: ["Free", "Culture", "Art exhibitions"],
-    image: "/modern-art-gallery.png",
-    isFree: true,
-  },
-  {
-    id: "3",
-    name: "Riverside Walking Path",
-    category: "Walking Trail",
-    rating: 4.7,
-    distance: "2.1 km",
-    tags: ["Free", "Exercise", "Scenic views"],
-    image: "/riverside-walking-path.png",
-    isFree: true,
-  },
-]
+const toKm = (meters?: number) => (typeof meters === "number" ? `${(meters / 1000).toFixed(1)} km` : "")
 
 const categories = ["All", "Parks", "Libraries", "Museums", "Cafés", "Events"]
 
 export default function FreePlacesPage() {
-  const [places, setPlaces] = useState(mockPlaces)
+  const { coords, loading: geoLoading } = useGeo()
+  const [places, setPlaces] = useState<Place[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [likedPlaces, setLikedPlaces] = useState<string[]>([])
+  const { budgetMode } = useBudgetMode()
+  const { addPreference, addDisliked } = useMemory()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchPlaces = async () => {
+      if (!coords) return
+      setLoading(true)
+      setError(null)
+      try {
+        // 50km radius
+        const res = await searchPlaces({ lat: coords.lat, lon: coords.lon, radius: 50000, query: "park" })
+        const mapped: Place[] = (res.results || []).map((r: any) => ({
+          id: r.fsq_place_id,  // NEW: Updated field name for new API
+          name: r.name,
+          category: r.categories?.[0]?.name || "Place",
+          rating: r.rating || 4.2,
+          distance: toKm(r.distance),
+          tags: (r.categories || []).slice(0, 3).map((c: any) => c.name),
+          image: r.photos && r.photos.length > 0 ? r.photos[0] : "/placeholder.svg",
+          isFree: true,
+        }))
+        setPlaces(mapped)
+        setCurrentIndex(0)
+      } catch (e: any) {
+        setError(e?.message || "Failed to load places")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPlaces()
+  }, [coords])
 
   const currentPlace = places[currentIndex]
 
   const handleLike = () => {
     if (currentPlace) {
       setLikedPlaces([...likedPlaces, currentPlace.id])
+      addPreference({ id: currentPlace.id, name: currentPlace.name })
       nextPlace()
     }
   }
 
   const handleDislike = () => {
-    nextPlace()
+    if (currentPlace) {
+      addDisliked({ id: currentPlace.id, name: currentPlace.name })
+      nextPlace()
+    } else {
+      nextPlace()
+    }
   }
 
   const nextPlace = () => {
@@ -84,7 +97,31 @@ export default function FreePlacesPage() {
 
   const refreshPlaces = () => {
     setCurrentIndex(0)
-    // In a real app, this would fetch new places
+    // Trigger re-fetch by resetting coords-based effect; simple no-op here
+  }
+
+  if (loading || geoLoading) {
+    return (
+      <div className="min-h-screen">
+        <TopNavigation />
+        <main className="container mx-auto px-4 py-6 pb-20 md:pb-8 max-w-2xl">
+          <div className="text-center">Loading nearby free places...</div>
+        </main>
+        <BottomNavigation />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen">
+        <TopNavigation />
+        <main className="container mx-auto px-4 py-6 pb-20 md:pb-8 max-w-2xl">
+          <div className="text-center text-destructive">{error}</div>
+        </main>
+        <BottomNavigation />
+      </div>
+    )
   }
 
   if (!currentPlace) {
@@ -142,6 +179,9 @@ export default function FreePlacesPage() {
                 {category}
               </Button>
             ))}
+            {budgetMode && (
+              <Badge variant="secondary" className="ml-2">Budget mode</Badge>
+            )}
           </div>
 
           {/* Place Card */}
@@ -151,6 +191,9 @@ export default function FreePlacesPage() {
                 src={currentPlace.image || "/placeholder.svg"}
                 alt={currentPlace.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/placeholder.svg"
+                }}
               />
               {currentPlace.isFree && (
                 <Badge className="absolute top-4 left-4 bg-green-500 hover:bg-green-600">Free</Badge>

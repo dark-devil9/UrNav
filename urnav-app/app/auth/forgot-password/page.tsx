@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Compass, Mail, ArrowLeft } from "lucide-react"
+import Image from "next/image"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -26,8 +27,14 @@ export default function ForgotPasswordPage() {
         <div className="w-full max-w-md space-y-6">
           <div className="text-center space-y-2">
             <div className="flex justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-                <Compass className="h-7 w-7 text-primary-foreground" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary overflow-hidden">
+                <Image 
+                  src="/urnavlogo.jpeg" 
+                  alt="UrNav Logo" 
+                  width={48} 
+                  height={48}
+                  className="object-cover"
+                />
               </div>
             </div>
             <h1 className="font-serif text-2xl font-bold text-foreground">Check your email</h1>
@@ -68,8 +75,14 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Compass className="h-7 w-7 text-primary-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary overflow-hidden">
+              <Image 
+                src="/urnavlogo.jpeg" 
+                alt="UrNav Logo" 
+                width={48} 
+                height={48}
+                className="object-cover"
+              />
             </div>
           </div>
           <h1 className="font-serif text-2xl font-bold text-foreground">Reset Password</h1>

@@ -1,5 +1,6 @@
 import { TopNavigation, BottomNavigation } from "@/components/navigation"
 import { ModesGrid } from "@/components/modes-grid"
+import { FloatingMic } from "@/components/floating-mic"
 
 export default function ModesPage() {
   return (
@@ -16,6 +17,7 @@ export default function ModesPage() {
           <ModesGrid />
         </div>
       </main>
+      <FloatingMic />
       <BottomNavigation />
     </div>
   )

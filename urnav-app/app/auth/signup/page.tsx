@@ -12,6 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Compass, Mail, Lock, Eye, EyeOff, User } from "lucide-react"
+import Image from "next/image"
+import { signup } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -25,12 +28,30 @@ export default function SignupPage() {
   })
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Add validation logic here
-    console.log("Signup attempt:", formData)
-    // Redirect to onboarding after successful signup
-    router.push("/auth/onboarding")
+    setLoading(true)
+    setErrors({})
+    try {
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error("Passwords do not match")
+      }
+      const res = await signup({ email: formData.email, password: formData.password })
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("urnav_token", res.access_token)
+        if (formData.name) {
+          window.localStorage.setItem("urnav_name", formData.name)
+        }
+      }
+      toast.success("Account created")
+      router.push("/")
+    } catch (err: any) {
+      toast.error(err?.message || "Signup failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -39,8 +60,14 @@ export default function SignupPage() {
         {/* Logo */}
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Compass className="h-7 w-7 text-primary-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary overflow-hidden">
+              <Image 
+                src="/urnavlogo.jpeg" 
+                alt="UrNav Logo" 
+                width={48} 
+                height={48}
+                className="object-cover"
+              />
             </div>
           </div>
           <h1 className="font-serif text-2xl font-bold text-foreground">Join URNAV</h1>
@@ -149,8 +176,8 @@ export default function SignupPage() {
                 </Label>
               </div>
 
-              <Button type="submit" className="w-full">
-                Create Account
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Creating..." : "Create Account"}
               </Button>
             </form>
 

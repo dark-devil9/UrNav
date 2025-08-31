@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { TopNavigation, BottomNavigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +24,7 @@ import {
   Volume2,
   DollarSign,
 } from "lucide-react"
+import { me } from "@/lib/api"
 
 interface Preference {
   id: string
@@ -102,6 +103,26 @@ export default function ProfilePage() {
   const [dislikedPlaces, setDislikedPlaces] = useState(mockDislikedPlaces)
   const [locationAwareness, setLocationAwareness] = useState(true)
   const [notifications, setNotifications] = useState(true)
+  const [displayName, setDisplayName] = useState<string>("User")
+  const [email, setEmail] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const profile = await me()
+        setEmail(profile.email)
+        if (profile.preferences) {
+          // Optionally hydrate preferences here
+        }
+        setLocationAwareness(!!profile.location_awareness)
+      } catch {}
+      if (typeof window !== "undefined") {
+        const name = window.localStorage.getItem("urnav_name")
+        if (name) setDisplayName(name)
+      }
+    }
+    init()
+  }, [])
 
   const togglePreference = (id: string) => {
     setPreferences((prev) => prev.map((pref) => (pref.id === id ? { ...pref, selected: !pref.selected } : pref)))
@@ -135,8 +156,8 @@ export default function ProfilePage() {
                   <AvatarFallback className="bg-primary text-primary-foreground text-lg">JD</AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <h1 className="font-serif text-2xl font-bold">John Doe</h1>
-                  <p className="text-muted-foreground">john.doe@example.com</p>
+                  <h1 className="font-serif text-2xl font-bold">{displayName}</h1>
+                  <p className="text-muted-foreground">{email || ""}</p>
                   <div className="flex items-center space-x-2 mt-2">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Jaipur, Rajasthan</span>

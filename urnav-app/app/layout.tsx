@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Space_Grotesk, DM_Sans } from "next/font/google"
 import "./globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -27,8 +29,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${dmSans.variable} antialiased`}>
-      <body className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">{children}</body>
+    <html lang="en" className={`${spaceGrotesk.variable} ${dmSans.variable} antialiased`} suppressHydrationWarning>
+      <body className="min-h-screen bg-background text-foreground">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+          <SonnerToaster position="bottom-center" richColors closeButton expand />
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

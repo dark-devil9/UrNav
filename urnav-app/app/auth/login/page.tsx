@@ -10,19 +10,37 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Compass, Mail, Lock, Eye, EyeOff } from "lucide-react"
+import Image from "next/image"
+import { login } from "@/lib/api"
+import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   })
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Add validation logic here
-    console.log("Login attempt:", formData)
+    setLoading(true)
+    setErrors({})
+    try {
+      const res = await login({ email: formData.email, password: formData.password })
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("urnav_token", res.access_token)
+      }
+      toast.success("Signed in")
+      router.push("/")
+    } catch (err: any) {
+      toast.error(err?.message || "Login failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -31,8 +49,14 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center space-y-2">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <Compass className="h-7 w-7 text-primary-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary overflow-hidden">
+              <Image 
+                src="/urnavlogo.jpeg" 
+                alt="UrNav Logo" 
+                width={48} 
+                height={48}
+                className="object-cover"
+              />
             </div>
           </div>
           <h1 className="font-serif text-2xl font-bold text-foreground">Welcome to URNAV</h1>
@@ -97,8 +121,8 @@ export default function LoginPage() {
                 </Link>
               </div>
 
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Signing In..." : "Sign In"}
               </Button>
             </form>
 

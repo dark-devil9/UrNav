@@ -3,10 +3,15 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Clock, Cloud, Menu, Home, Compass, Map, User } from "lucide-react"
+import { MapPin, Clock, Cloud, Menu, Home, Compass, Map, User, Sun, Moon } from "lucide-react"
+import Image from "next/image"
+import { useSystemStatus } from "@/hooks/use-system-status"
+import { useTheme } from "next-themes"
 
 export function TopNavigation() {
   const pathname = usePathname()
+  const { locationLabel, timeString, weather } = useSystemStatus()
+  const { theme, setTheme } = useTheme()
 
   const getActiveTab = () => {
     if (pathname === "/") return "HOME"
@@ -23,8 +28,14 @@ export function TopNavigation() {
       <div className="container flex h-16 items-center justify-between px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Compass className="h-5 w-5 text-primary-foreground" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary overflow-hidden">
+            <Image 
+              src="/urnavlogo.jpeg" 
+              alt="UrNav Logo" 
+              width={32} 
+              height={32}
+              className="object-cover"
+            />
           </div>
           <h1 className="font-serif text-xl font-bold text-foreground">URNAV</h1>
         </Link>
@@ -83,18 +94,26 @@ export function TopNavigation() {
 
         {/* Status Badges */}
         <div className="flex items-center space-x-3">
-          <Badge variant="secondary" className="hidden sm:flex items-center space-x-1">
+          <Badge variant="secondary" className="hidden sm:flex items-center space-x-1 max-w-[180px] truncate">
             <MapPin className="h-3 w-3" />
-            <span className="text-xs">Jaipur, Rajasthan</span>
+            <span className="text-xs truncate">{locationLabel}</span>
           </Badge>
           <Badge variant="secondary" className="hidden sm:flex items-center space-x-1">
             <Clock className="h-3 w-3" />
-            <span className="text-xs">2:30 PM</span>
+            <span className="text-xs">{timeString}</span>
           </Badge>
           <Badge variant="secondary" className="hidden sm:flex items-center space-x-1">
             <Cloud className="h-3 w-3" />
-            <span className="text-xs">28°C</span>
+            <span className="text-xs">{weather.temperatureC}°C</span>
           </Badge>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Toggle theme"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
           <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="h-5 w-5" />
           </Button>

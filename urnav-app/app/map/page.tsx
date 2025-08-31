@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { TopNavigation, BottomNavigation } from "@/components/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { MapPin, Search, Filter, Navigation, Star, Wifi, DollarSign, Heart, Leaf, Volume2 } from "lucide-react"
+import { MapWidget } from "@/components/map-widget"
+import { useGeo } from "@/hooks/use-geo"
+import { searchPlaces } from "@/lib/api"
 
 interface MapPlace {
   id: string
@@ -20,42 +23,6 @@ interface MapPlace {
   isOpen: boolean
   priceLevel: number
 }
-
-const mockPlaces: MapPlace[] = [
-  {
-    id: "1",
-    name: "Central Park",
-    category: "Public Park",
-    rating: 4.5,
-    distance: "0.8 km",
-    tags: ["Free", "Nature", "Walking"],
-    coordinates: { lat: 26.9124, lng: 75.7873 },
-    isOpen: true,
-    priceLevel: 0,
-  },
-  {
-    id: "2",
-    name: "Cafe Coffee Day",
-    category: "Coffee Shop",
-    rating: 4.2,
-    distance: "1.2 km",
-    tags: ["Wi-Fi", "Budget-friendly"],
-    coordinates: { lat: 26.9154, lng: 75.7903 },
-    isOpen: true,
-    priceLevel: 2,
-  },
-  {
-    id: "3",
-    name: "City Library",
-    category: "Library",
-    rating: 4.6,
-    distance: "1.5 km",
-    tags: ["Quiet", "Free", "Study space"],
-    coordinates: { lat: 26.9094, lng: 75.7843 },
-    isOpen: false,
-    priceLevel: 0,
-  },
-]
 
 const filterOptions = [
   { id: "wifi", label: "Wi-Fi", icon: Wifi },
@@ -70,6 +37,11 @@ export default function MapPage() {
   const [selectedPlace, setSelectedPlace] = useState<MapPlace | null>(null)
   const [activeFilters, setActiveFilters] = useState<string[]>([])
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [places, setPlaces] = useState<MapPlace[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { coords, error: geoError, loading: geoLoading } = useGeo()
 
   const toggleFilter = (filterId: string) => {
     setActiveFilters((prev) => (prev.includes(filterId) ? prev.filter((id) => id !== filterId) : [...prev, filterId]))
@@ -84,6 +56,50 @@ export default function MapPage() {
     return "₹".repeat(level)
   }
 
+  // Build tags from filters (simple mapping)
+  const selectedTags = useMemo(() => {
+    const tags: string[] = []
+    if (activeFilters.includes("vegetarian")) tags.push("vegetarian")
+    if (activeFilters.includes("free")) tags.push("park")
+    return tags.join(",") || undefined
+  }, [activeFilters])
+
+  // Fetch places when coords or query/filters change (debounced)
+  useEffect(() => {
+    if (!coords) return
+    const t = setTimeout(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await searchPlaces({ lat: coords.lat, lon: coords.lon, query: searchQuery || undefined, radius: 2000, tags: selectedTags })
+        const normalized: MapPlace[] = (res.results || []).map((r: any) => ({
+          id: r.fsq_place_id,  // NEW: Updated field name for new API
+          name: r.name,
+          category: r.categories?.[0]?.name || "",
+          rating: r.rating || 4.2,
+          distance: r.distance ? `${Math.round((r.distance || 0) / 1000)} km` : "",
+          tags: (r.categories || []).slice(0, 3).map((c: any) => c.name),
+          // NEW: Use latitude/longitude instead of geocodes.main
+          coordinates: { lat: r.latitude, lng: r.longitude },
+          isOpen: true,
+          priceLevel: 1,
+        })).filter(p => p.coordinates.lat && p.coordinates.lng)
+        setPlaces(normalized)
+        if (normalized.length > 0) setSelectedPlace(normalized[0])
+      } catch (e: any) {
+        setError(e?.message || "Failed to fetch places")
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [coords, searchQuery, selectedTags])
+
+  const mapPoints = useMemo(() => {
+    if (selectedPlace) return [{ lat: coords?.lat || selectedPlace.coordinates.lat, lng: coords?.lon || selectedPlace.coordinates.lng }, selectedPlace.coordinates]
+    return places.slice(0, 5).map((p) => p.coordinates)
+  }, [selectedPlace, places, coords])
+
   return (
     <div className="min-h-screen">
       <TopNavigation />
@@ -93,7 +109,7 @@ export default function MapPage() {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search places..."
+              placeholder={geoLoading ? "Detecting location..." : geoError ? "Location unavailable - search nearby" : "Search places..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-card/95 backdrop-blur"
@@ -145,32 +161,9 @@ export default function MapPage() {
           </Sheet>
         </div>
 
-        {/* Map Container */}
-        <div className="w-full h-full bg-muted flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <MapPin className="h-16 w-16 text-muted-foreground mx-auto" />
-            <div className="space-y-2">
-              <h3 className="font-serif text-xl font-semibold">Interactive Map</h3>
-              <p className="text-muted-foreground max-w-md">
-                Full-featured map with place markers, current location, and route planning would be integrated here
-              </p>
-            </div>
-            {/* Mock place markers */}
-            <div className="flex justify-center space-x-4">
-              {mockPlaces.slice(0, 3).map((place) => (
-                <Button
-                  key={place.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedPlace(place)}
-                  className="bg-card/95 backdrop-blur"
-                >
-                  <MapPin className="h-3 w-3 mr-1" />
-                  {place.name}
-                </Button>
-              ))}
-            </div>
-          </div>
+        {/* Map Container with simple route/summary */}
+        <div className="w-full h-full p-4">
+          <MapWidget mode={selectedPlace ? "single" : "multi"} points={mapPoints} />
         </div>
 
         {/* Place Cards Drawer */}
@@ -178,10 +171,12 @@ export default function MapPage() {
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium">Nearby Places</h3>
-              <Badge variant="secondary">{mockPlaces.length} places</Badge>
+              <Badge variant="secondary">{loading ? "…" : places.length} places</Badge>
             </div>
+            {error && <div className="text-sm text-destructive mb-2">{error}</div>}
+            {geoError && <div className="text-xs text-muted-foreground mb-2">{geoError}. You can still search manually.</div>}
             <div className="flex space-x-4 overflow-x-auto pb-2">
-              {mockPlaces.map((place) => (
+              {places.map((place) => (
                 <Card
                   key={place.id}
                   className={`min-w-[280px] cursor-pointer transition-all ${
