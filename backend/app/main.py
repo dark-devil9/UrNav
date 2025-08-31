@@ -16,7 +16,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     # Temporarily disabled for deployment without database
-    # await init_db()
+    await init_db()
     pass
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
