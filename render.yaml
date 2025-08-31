@@ -2,7 +2,6 @@ services:
   # PostgreSQL Database
   - type: pserv
     name: urnav-db
-    env: postgresql
     plan: free
     region: oregon
     
