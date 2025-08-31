@@ -1,4 +1,10 @@
 services:
+  # PostgreSQL Database
+  - type: pserv
+    name: urnav-db
+    plan: free
+    region: oregon
+    
   # FastAPI Backend
   - type: web
     name: urnav-backend
@@ -9,7 +15,9 @@ services:
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        value: postgresql+asyncpg://postgres:postgres@localhost:5432/urnav
+        fromDatabase:
+          name: urnav-db
+          property: connectionString
       - key: FOURSQUARE_API_KEY
         sync: false
       - key: MISTRAL_API_KEY
