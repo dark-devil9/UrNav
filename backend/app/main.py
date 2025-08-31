@@ -3,8 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import init_db
 from .routes import auth, users, places, modes, routes_api, chat_routes
 
-
-
 app = FastAPI(title="URNAV Backend", version="0.1.0")
 
 app.add_middleware(
@@ -17,7 +15,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup():
-    await init_db()
+    # Temporarily disabled for deployment without database
+    # await init_db()
+    pass
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(users.router, prefix="/users", tags=["users"])
