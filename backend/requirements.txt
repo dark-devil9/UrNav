@@ -10,4 +10,3 @@ pydantic-settings
 email-validator
 websockets
 python-dotenv
-psycopg2-binary
